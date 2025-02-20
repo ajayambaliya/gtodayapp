@@ -1,0 +1,8 @@
+beautifulsoup4
+requests
+mysql-connector-python
+deep-translator
+pillow
+firebase-admin
+python-dotenv
+ftplib
