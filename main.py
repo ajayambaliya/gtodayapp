@@ -71,7 +71,24 @@ CATEGORY_MAP = {
     "કૃષિ વર્તમાન બાબતો": 24,
     "કલા અને સંસ્કૃતિ વર્તમાન બાબતો": 25,
 }
+CUSTOM_TRANSLATION_MAP = {
 
+    "Science and Technology Current Affairs": "વિજ્ઞાન અને ટેકનોલોજી વર્તમાન બાબતો",
+    "Defense Current Affairs": "સંરક્ષણ વર્તમાન બાબતો",
+    "Legal and Constitutional Current Affairs": "કાનૂની અને બંધારણ વર્તમાન બાબતો",
+    "Environmental Current Affairs": "પર્યાવરણ વર્તમાન બાબતો",
+    "Government Schemes Current Affairs": "સરકારી યોજનાઓ વર્તમાન બાબતો",
+    "Economy and Banking Current Affairs": "અર્થતંત્ર અને બેંકિંગ વર્તમાન બાબતો",
+    "International/World Current Affairs": "આંતરરાષ્ટ્રીય/વિશ્વ વર્તમાન બાબતો",
+    "Summits and Conferences": "સમિટ અને પરિષદો",
+    "Important Days and Events Current Affairs": "મહત્વપૂર્ણ દિવસો અને ઘટનાઓ વર્તમાન બાબતો",
+    "Reports and Indices Current Affairs": "અહેવાલો અને સૂચકાંકો વર્તમાન બાબતો",
+    "Sports Current Affairs": "રમતગમત વર્તમાન બાબતો",
+    "Awards, Honors and Persons in News": "સમાચારમાં પુરસ્કારો, સન્માનો અને વ્યક્તિઓ",
+    "Agriculture Current Affairs": "કૃષિ વર્તમાન બાબતો",
+    "Art and Culture Current Affairs": "કલા અને સંસ્કૃતિ વર્તમાન બાબતો",
+    # Add more terms/phrases here...
+}
 
 
 # Load environment variables
@@ -107,7 +124,7 @@ def fetch_article_urls(base_url, pages):
     logging.info(f"Starting to fetch articles from {base_url} for {pages} pages")
     session = requests.Session()  # Use session for better performance
     
-    for page in range(1, pages + 1):
+    for page in range(1, pages + 3):
         url = base_url if page == 1 else f"{base_url}page/{page}/"
         try:
             logging.debug(f"Fetching page {page}: {url}")
@@ -131,26 +148,30 @@ def fetch_article_urls(base_url, pages):
 translation_cache = {}
 
 def translate_to_gujarati(text):
-    if not text or len(text.strip()) == 0:
+    # Quick return if text is empty or whitespace
+    if not text or not text.strip():
         return text
-     
+
+    # Apply custom translations BEFORE calling Google Translate
+    # This ensures that these phrases will not be further changed by Google Translate
+    for en_term, gu_term in CUSTOM_TRANSLATION_MAP.items():
+        text = text.replace(en_term, gu_term)
+
+    # Check cache
     if text in translation_cache:
         return translation_cache[text]
-     
+
     try:
         logging.debug(f"Translating text (first 50 chars): {text[:50]}...")
         translator = GoogleTranslator(source='auto', target='gu')
         translated = translator.translate(text)
-        translation_cache[text] = translated  # Cache translation result
+        translation_cache[text] = translated  # Cache the translated result
         logging.debug("Translation successful")
         return translated
     except Exception as e:
+        # If an error occurs with Google Translate, log a warning and return the original text
         logging.warning(f"Translation error: {e}, returning original text")
-        return text
-
-    except Exception as e:
-        logging.error(f"Translation error: {e}")
-        logging.error(traceback.format_exc())
+        logging.warning(traceback.format_exc())
         return text
 
 
