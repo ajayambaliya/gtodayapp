@@ -124,7 +124,7 @@ def fetch_article_urls(base_url, pages):
     logging.info(f"Starting to fetch articles from {base_url} for {pages} pages")
     session = requests.Session()  # Use session for better performance
     
-    for page in range(1, pages + 3):
+    for page in range(1, pages + 1):
         url = base_url if page == 1 else f"{base_url}page/{page}/"
         try:
             logging.debug(f"Fetching page {page}: {url}")
