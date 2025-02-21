@@ -46,14 +46,14 @@ if not port_str.isdigit():
     port_str = '21'
 port = int(port_str)
 
-# FTP Configuration (modified to use environment variables)
 FTP_CONFIG = {
     'host': os.getenv('FTP_HOST'),
     'user': os.getenv('FTP_USER'),
     'password': os.getenv('FTP_PASSWORD'),
     'port': port,
-    'upload_path': '/'
+    'upload_path': os.getenv('FTP_UPLOAD_PATH', '/')
 }
+
 
 CATEGORY_MAP = {
     "વિજ્ઞાન અને ટેકનોલોજી વર્તમાન બાબતો": 12,
