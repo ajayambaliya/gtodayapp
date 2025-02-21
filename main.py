@@ -46,8 +46,8 @@ FTP_CONFIG = {
     'host': os.getenv('FTP_HOST'),
     'user': os.getenv('FTP_USER'),
     'password': os.getenv('FTP_PASSWORD'),
-    'port': int(os.getenv('FTP_PORT', 21)),
-    'upload_path': os.getenv('FTP_UPLOAD_PATH', '/')
+    'port': 21,
+    'upload_path': '/'
 }
 
 CATEGORY_MAP = {
