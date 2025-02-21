@@ -4,7 +4,7 @@ on:
   # Schedule: Runs at 3:30 AM UTC, which is 9:00 AM IST
   schedule:
     - cron: '30 3 * * *'
-  # Allows you to manually trigger this workflow in GitHub
+  # Allows manual workflow triggers
   workflow_dispatch:
 
 jobs:
@@ -13,12 +13,12 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v2
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: 3.9
+          python-version: '3.9'
 
       - name: Install dependencies
         run: |
@@ -26,8 +26,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run scraper
+        # Update to your actual script name if it's different
         run: python main.py
         env:
+          # Provide environment variables/secrets here
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
