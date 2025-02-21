@@ -41,12 +41,17 @@ DB_CONFIG = {
     'database': os.getenv('DB_NAME')
 }
 
+port_str = os.getenv('FTP_PORT', '').strip()
+if not port_str.isdigit():
+    port_str = '21'
+port = int(port_str)
+
 # FTP Configuration (modified to use environment variables)
 FTP_CONFIG = {
     'host': os.getenv('FTP_HOST'),
     'user': os.getenv('FTP_USER'),
     'password': os.getenv('FTP_PASSWORD'),
-    'port': 21,
+    'port': port,
     'upload_path': '/'
 }
 
