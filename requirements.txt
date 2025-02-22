@@ -1,7 +1,8 @@
 requests
-mysql-connector-python
 beautifulsoup4
+mysql-connector-python
 deep-translator
-Pillow
-firebase-admin
+pillow
 python-dotenv
+tenacity
+firebase-admin
