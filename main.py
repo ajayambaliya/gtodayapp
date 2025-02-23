@@ -24,21 +24,18 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 # Load environment variables
 load_dotenv()
 
+# Configure logging to log only to console
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]  # Log only to console
+)
+
 # Debug environment variables
 logging.debug(f"DB_HOST: {os.getenv('DB_HOST')}")
 logging.debug(f"DB_USER: {os.getenv('DB_USER')}")
 logging.debug(f"DB_PASSWORD: {os.getenv('DB_PASSWORD')}")
 logging.debug(f"DB_NAME: {os.getenv('DB_NAME')}")
-
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('news_scraper.log', encoding='utf-8')
-    ]
-)
 
 # Database configuration
 DB_CONFIG = {
@@ -63,9 +60,10 @@ TELEGRAM_CHANNEL = os.getenv('TELEGRAM_CHANNEL')
 
 # Initialize Firebase once at the module level
 def initialize_firebase():
-    if not firebase_admin._apps:  # Check if no apps are initialized
+    if not firebase_admin._apps:
         service_account_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
         service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH')
+        logging.debug(f"Firebase service account path: {service_account_path}")
         if service_account_json:
             cred = credentials.Certificate(json.loads(service_account_json))
         elif service_account_path and os.path.exists(service_account_path):
@@ -77,7 +75,6 @@ def initialize_firebase():
     else:
         logging.debug("Firebase already initialized, skipping reinitialization")
 
-# Call Firebase initialization once
 initialize_firebase()
 
 CATEGORY_MAP = {
@@ -121,6 +118,7 @@ def check_and_reconnect(connection):
     try:
         if connection and connection.is_connected():
             connection.ping(reconnect=True)
+            logging.debug("Database connection is alive")
             return connection
         logging.info("Connection lost, reconnecting...")
         return create_db_connection()
@@ -131,6 +129,7 @@ def check_and_reconnect(connection):
 def fetch_article_urls(base_url, pages):
     article_urls = []
     session = requests.Session()
+    logging.info(f"Fetching article URLs from {base_url} for {pages} pages")
     for page in range(1, pages + 1):
         url = base_url if page == 1 else f"{base_url}page/{page}/"
         try:
@@ -150,13 +149,17 @@ translation_cache = {}
 
 def translate_to_gujarati(text):
     if not text or len(text.strip()) == 0:
+        logging.debug("Empty text received for translation, returning as-is")
         return text
     if text in translation_cache:
+        logging.debug(f"Using cached translation for: {text[:50]}...")
         return translation_cache[text]
     try:
+        logging.debug(f"Translating: {text[:50]}...")
         translator = GoogleTranslator(source='auto', target='gu')
         translated = translator.translate(text)
         translation_cache[text] = translated
+        logging.debug(f"Translated to: {translated[:50]}...")
         return translated
     except Exception as e:
         logging.warning(f"Translation error: {e}, returning original text")
@@ -167,10 +170,12 @@ def download_and_process_image(image_url):
     temp_file_path = None
     ftp = None
     try:
+        logging.info(f"Downloading image from: {image_url}")
         response = requests.get(image_url, timeout=30)
         response.raise_for_status()
         with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
             temp_file_path = tmp_file.name
+            logging.debug(f"Created temp file: {temp_file_path}")
             img = Image.open(io.BytesIO(response.content)).convert('RGB')
             img.save(temp_file_path, 'PNG')
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -182,6 +187,7 @@ def download_and_process_image(image_url):
             ftp.cwd(FTP_CONFIG['upload_path'])
             with open(temp_file_path, 'rb') as file:
                 ftp.storbinary(f'STOR {filename}', file)
+            logging.info(f"Image uploaded as: {filename}")
             return filename
     except Exception as e:
         logging.error(f"Image processing error: {e}")
@@ -189,36 +195,37 @@ def download_and_process_image(image_url):
     finally:
         if ftp and ftp.sock:
             ftp.quit()
+            logging.debug("FTP connection closed")
         if temp_file_path and os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
+            logging.debug(f"Temporary file deleted: {temp_file_path}")
 
 def format_content_as_html(content_list):
     try:
         translated_content = next((item['text'] for item in content_list if item.get('type') in ['heading', 'paragraph'] and item.get('text')), "Article")
         translated_first_paragraph = next((item['text'] for item in content_list if item.get('type') == 'paragraph' and item.get('text')), "")
+        logging.debug(f"Formatting HTML with title: {translated_content[:50]}...")
         head_content = f'''
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{translated_content[:100]} - {translated_first_paragraph}</title>
+            <title>{translated_content[:100]}</title>
             <link href="https://fonts.googleapis.com/css2?family=Hind+Vadodara:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         '''
         css = '''
             <style>
             :root {
-                --primary-color: #2c3e50;  /* Dark blue-gray */
-                --secondary-color: #e74c3c; /* Vibrant red */
-                --accent-color: #f1c40f;   /* Bright yellow */
+                --primary-color: #2c3e50;
+                --secondary-color: #e74c3c;
+                --accent-color: #f1c40f;
                 --background-light: #ecf0f1;
                 --text-dark: #34495e;
                 --shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
             }
-
             * {
                 margin: 0;
                 padding: 0;
                 box-sizing: border-box;
             }
-
             body {
                 font-family: 'Hind Vadodara', sans-serif;
                 background: linear-gradient(135deg, #bdc3c7, #2c3e50);
@@ -226,8 +233,6 @@ def format_content_as_html(content_list):
                 line-height: 1.8;
                 overflow-x: hidden;
             }
-
-            /* Header Styling */
             .header {
                 background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
                 color: white;
@@ -237,7 +242,6 @@ def format_content_as_html(content_list):
                 box-shadow: var(--shadow);
                 animation: slideInDown 1s ease-out;
             }
-
             .header h1 {
                 font-size: 2.5rem;
                 font-weight: 700;
@@ -245,8 +249,6 @@ def format_content_as_html(content_list):
                 letter-spacing: 2px;
                 text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
             }
-
-            /* News Content Container */
             .news-content {
                 max-width: 900px;
                 margin: 3rem auto;
@@ -258,7 +260,6 @@ def format_content_as_html(content_list):
                 overflow: hidden;
                 animation: fadeInUp 1s ease-out;
             }
-
             .news-content::before {
                 content: '';
                 position: absolute;
@@ -268,8 +269,6 @@ def format_content_as_html(content_list):
                 height: 5px;
                 background: linear-gradient(90deg, var(--secondary-color), var(--accent-color));
             }
-
-            /* News Title */
             .news-title {
                 font-size: 2.8rem;
                 font-weight: 700;
@@ -279,7 +278,6 @@ def format_content_as_html(content_list):
                 position: relative;
                 padding-bottom: 0.5rem;
             }
-
             .news-title::after {
                 content: '';
                 position: absolute;
@@ -291,8 +289,6 @@ def format_content_as_html(content_list):
                 background: var(--secondary-color);
                 border-radius: 2px;
             }
-
-            /* News Paragraph */
             .news-paragraph {
                 font-size: 1.2rem;
                 font-weight: 400;
@@ -303,95 +299,57 @@ def format_content_as_html(content_list):
                 border-radius: 10px;
                 transition: transform 0.3s ease, box-shadow 0.3s ease;
             }
-
             .news-paragraph:hover {
                 transform: translateY(-5px);
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             }
-
-            /* News List Item */
             .news-list-item {
                 font-size: 1.1rem;
                 font-weight: 500;
                 margin: 1rem 0;
                 padding: 1.5rem;
-                padding-left: 4rem; /* Increased padding to avoid overlap */
+                padding-left: 3rem;
                 background: linear-gradient(135deg, #dfe6e9, #b2bec3);
                 border-radius: 12px;
                 position: relative;
                 transition: transform 0.3s ease, background 0.3s ease;
                 box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             }
-
             .news-list-item::before {
                 content: '➤';
                 position: absolute;
-                left: 1rem; /* Adjusted position for better spacing */
+                left: 1rem;
                 top: 50%;
                 transform: translateY(-50%);
                 color: var(--accent-color);
                 font-size: 1.2rem;
             }
-
             .news-list-item:hover {
                 transform: scale(1.02);
                 background: linear-gradient(135deg, #fab1a0, #e17055);
                 color: white;
             }
-
-            /* Animations */
             @keyframes slideInDown {
                 from { transform: translateY(-100%); opacity: 0; }
                 to { transform: translateY(0); opacity: 1; }
             }
-
             @keyframes fadeInUp {
                 from { transform: translateY(50px); opacity: 0; }
                 to { transform: translateY(0); opacity: 1; }
             }
-
-            /* Responsive Design */
             @media (max-width: 768px) {
-                .header h1 {
-                    font-size: 2rem;
-                }
-                .news-content {
-                    margin: 1.5rem;
-                    padding: 1.5rem;
-                }
-                .news-title {
-                    font-size: 2rem;
-                }
-                .news-paragraph {
-                    font-size: 1rem;
-                    padding: 0.8rem;
-                }
-                .news-list-item {
-                    font-size: 1rem;
-                    padding: 1rem;
-                    padding-left: 2.5rem; /* Adjusted for smaller screens */
-                }
+                .header h1 { font-size: 2rem; }
+                .news-content { margin: 1.5rem; padding: 1.5rem; }
+                .news-title { font-size: 2rem; }
+                .news-paragraph { font-size: 1rem; padding: 0.8rem; }
+                .news-list-item { font-size: 1rem; padding: 1rem; padding-left: 2.5rem; }
             }
-
             @media (max-width: 480px) {
-                .header h1 {
-                    font-size: 1.5rem;
-                }
-                .news-content {
-                    margin: 1rem;
-                    padding: 1rem;
-                }
-                .news-title {
-                    font-size: 1.6rem;
-                }
-                .news-paragraph {
-                    font-size: 0.9rem;
-                }
-                .news-list-item {
-                    font-size: 0.9rem;
-                    padding: 0.8rem;
-                    padding-left: 2rem; /* Adjusted for mobile */
-                }
+                .header h1 { font-size: 1.5rem; }
+                .news-content { margin: 1rem; padding: 1rem; }
+                .news-title { font-size: 1.6rem; }
+                .news-paragraph { font-size: 0.9rem; }
+                .news-list-item { font-size: 0.9rem; padding: 0.8rem; padding-left: 2rem; }
             }
             </style>
         '''
@@ -405,9 +363,11 @@ def format_content_as_html(content_list):
         '''
         for item in content_list:
             if not isinstance(item, dict) or 'type' not in item or 'text' not in item:
+                logging.debug("Skipping invalid content item")
                 continue
             text = item['text'].strip()
             if not text:
+                logging.debug("Skipping empty text item")
                 continue
             if item['type'] == 'heading':
                 html += f'<h1 class="news-title">{text}</h1>'
@@ -416,9 +376,11 @@ def format_content_as_html(content_list):
             elif item['type'] == 'list_item':
                 html += f'<div class="news-list-item">{text}</div>'
         html += '</article></body></html>'
+        logging.debug("HTML formatting completed")
         return html
     except Exception as e:
         logging.error(f"HTML formatting error: {e}")
+        logging.error(traceback.format_exc())
         return ""
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(mysql.connector.Error))
@@ -435,15 +397,17 @@ def insert_news(connection, cat_id, news_title, news_description, news_image):
     try:
         connection = check_and_reconnect(connection)
         if not connection:
+            logging.error("Database connection is None")
             return False
         cursor = connection.cursor()
         cursor.execute(query, data)
         connection.commit()
         cursor.close()
-        logging.info("News inserted successfully")
+        logging.info(f"News inserted successfully: {news_title}")
         return True
     except mysql.connector.Error as err:
         logging.error(f"Error inserting news: {err}")
+        logging.error(traceback.format_exc())
         raise
 
 def send_promotional_message(channel_username, bot_token, article_titles):
@@ -453,6 +417,7 @@ def send_promotional_message(channel_username, bot_token, article_titles):
         for i, title in enumerate(article_titles, 1):
             message += f"\n{['📌', '🌟', '💡'][i % 3]} **{title}**"
         message += "\n\n📱 **Download our App**: [Link]\n📣 **Join Telegram**: [https://t.me/gujtest]"
+        logging.debug(f"Preparing Telegram message: {message[:100]}...")
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         params = {'chat_id': channel_username, 'text': message, 'parse_mode': 'Markdown'}
         response = requests.get(url, params=params)
@@ -462,11 +427,12 @@ def send_promotional_message(channel_username, bot_token, article_titles):
             logging.error(f"Failed to send Telegram message: {response.text}")
     except Exception as e:
         logging.error(f"Error sending Telegram message: {e}")
+        logging.error(traceback.format_exc())
 
 class FirebaseNotificationSender:
     def __init__(self, topic=None):
         self.fcm_notification_topic = topic or os.getenv('FCM_NOTIFICATION_TOPIC', 'android_news_app_topic')
-        # No need to initialize Firebase here since it's done at module level
+        logging.debug(f"Firebase sender initialized with topic: {self.fcm_notification_topic}")
 
     def send_notification(self, title, message, image_url=None):
         try:
@@ -476,30 +442,34 @@ class FirebaseNotificationSender:
                 data["image"] = image_url
             fcm_message = messaging.Message(notification=notification, data=data, topic=self.fcm_notification_topic)
             response = messaging.send(fcm_message)
-            logging.info(f"Notification sent: {response}")
+            logging.info(f"Firebase notification sent: {response}")
             return True, response
         except Exception as e:
-            logging.error(f"Failed to send notification: {e}")
+            logging.error(f"Failed to send Firebase notification: {e}")
+            logging.error(traceback.format_exc())
             return False, str(e)
 
-def send_post_notification(title, paragraph, image_name):
+def send_post_notification(combined_title, paragraph, image_name):
     try:
         image_url = f"https://newsadmin.currentadda.com/upload/{image_name}" if image_name else None
         sender = FirebaseNotificationSender()
-        clean_title = title[:100] if title else "Current Affairs Update"
+        clean_title = combined_title[:100] if combined_title else "Current Affairs Update"
         clean_paragraph = paragraph[:200] if paragraph else "New update available."
+        logging.debug(f"Sending Firebase notification with title: {clean_title[:50]}...")
         success, response = sender.send_notification(clean_title, clean_paragraph, image_url)
         if success:
-            logging.info(f"Firebase notification sent: {response}")
+            logging.info(f"Firebase notification sent successfully: {response}")
         else:
             logging.error(f"Firebase notification failed: {response}")
         return success
     except Exception as e:
         logging.error(f"Error in send_post_notification: {e}")
+        logging.error(traceback.format_exc())
         return False
 
 async def scrape_and_process_article(url, connection, article_titles):
     try:
+        logging.info(f"Processing article: {url}")
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -511,6 +481,7 @@ async def scrape_and_process_article(url, connection, article_titles):
             return False, None
         first_paragraph = main_content.find('p')
         first_paragraph_translated = translate_to_gujarati(first_paragraph.get_text().strip()) if first_paragraph else "No introductory text available."
+        logging.debug(f"First paragraph translated: {first_paragraph_translated[:50]}...")
         featured_image_div = soup.find('div', class_='featured_image')
         image_filename = None
         if featured_image_div and (img_tag := featured_image_div.find('img')) and img_tag.get('src'):
@@ -519,9 +490,11 @@ async def scrape_and_process_article(url, connection, article_titles):
         if not heading:
             logging.error("No heading found")
             return False, None
-        heading_text = heading.get_text().strip()
-        translated_heading = translate_to_gujarati(heading_text)
-        content_list = [{'type': 'heading', 'text': translated_heading}]
+        original_heading = heading.get_text().strip()
+        translated_heading = translate_to_gujarati(original_heading)
+        combined_heading = f"{original_heading} - {translated_heading}"
+        logging.debug(f"Combined heading: {combined_heading[:50]}...")
+        content_list = [{'type': 'heading', 'text': combined_heading}]
         for tag in main_content.find_all(recursive=False):
             if tag.get('class') in [['sharethis-inline-share-buttons'], ['prenext']]:
                 continue
@@ -539,19 +512,23 @@ async def scrape_and_process_article(url, connection, article_titles):
         cat_id = next((id for cat, id in CATEGORY_MAP.items() if cat in news_description), 1)
         formatted_html = format_content_as_html(content_list)
         if not formatted_html:
+            logging.error("Failed to format HTML content")
             return False, None
-        success = insert_news(connection, cat_id, translated_heading, formatted_html, image_filename)
-        if success and translated_heading:
-            send_post_notification(translated_heading, first_paragraph_translated, image_filename)
-            return True, translated_heading
+        success = insert_news(connection, cat_id, combined_heading, formatted_html, image_filename)
+        if success and combined_heading:
+            send_post_notification(combined_heading, first_paragraph_translated, image_filename)
+            return True, combined_heading
+        logging.warning("Failed to insert news into database")
         return False, None
     except Exception as e:
         logging.error(f"Error processing article {url}: {e}")
+        logging.error(traceback.format_exc())
         return False, None
 
 async def main():
     connection = None
     try:
+        logging.info("Starting news scraper")
         connection = create_db_connection()
         if not connection:
             raise Exception("Failed to establish initial database connection")
@@ -560,14 +537,19 @@ async def main():
         article_titles = []
         for url in article_urls:
             if 'daily-current-affairs-quiz' not in url:
-                success, translated_heading = await scrape_and_process_article(url, connection, article_titles)
-                if success and translated_heading:
-                    article_titles.append(translated_heading)
+                success, combined_title = await scrape_and_process_article(url, connection, article_titles)
+                if success and combined_title:
+                    article_titles.append(combined_title)
+                    logging.debug(f"Added title to list: {combined_title[:50]}...")
                 await asyncio.sleep(2)
         if article_titles:
+            logging.info(f"Sending Telegram message with {len(article_titles)} titles")
             send_promotional_message(TELEGRAM_CHANNEL, TELEGRAM_BOT_TOKEN, article_titles)
+        else:
+            logging.warning("No article titles to send in Telegram message")
     except Exception as e:
         logging.error(f"Main execution error: {e}")
+        logging.error(traceback.format_exc())
         raise
     finally:
         if connection:
@@ -576,12 +558,15 @@ async def main():
 
 def run_scraper():
     try:
+        logging.info("Running scraper")
         asyncio.run(main())
+        logging.info("Scraper completed successfully")
     except KeyboardInterrupt:
         logging.info("Script interrupted by user")
         sys.exit(0)
     except Exception as e:
         logging.error(f"Fatal error in run_scraper: {e}")
+        logging.error(traceback.format_exc())
         sys.exit(1)
 
 if __name__ == "__main__":
