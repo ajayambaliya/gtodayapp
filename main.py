@@ -20,6 +20,7 @@ import firebase_admin
 from firebase_admin import credentials, messaging
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from pymongo import MongoClient  # Added for MongoDB integration
 
 # Load environment variables
 load_dotenv()
@@ -28,16 +29,15 @@ load_dotenv()
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()]  # Log only to console
+    handlers=[logging.StreamHandler()]
 )
 
-# Debug environment variables
-logging.debug(f"DB_HOST: {os.getenv('DB_HOST')}")
-logging.debug(f"DB_USER: {os.getenv('DB_USER')}")
-logging.debug(f"DB_PASSWORD: {os.getenv('DB_PASSWORD')}")
-logging.debug(f"DB_NAME: {os.getenv('DB_NAME')}")
+# MongoDB Configuration
+MONGO_URI = os.getenv('MONGO_URI')
+MONGO_DB = os.getenv('MONGO_DB')
+MONGO_COLLECTION = 'scraped_urls'
 
-# Database configuration
+# Database configuration (MySQL)
 DB_CONFIG = {
     'host': os.getenv('DB_HOST'),
     'user': os.getenv('DB_USER'),
@@ -58,7 +58,7 @@ FTP_CONFIG = {
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHANNEL = os.getenv('TELEGRAM_CHANNEL')
 
-# Initialize Firebase once at the module level
+# Initialize Firebase
 def initialize_firebase():
     if not firebase_admin._apps:
         service_account_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
@@ -92,7 +92,39 @@ CATEGORY_MAP = {
     "સમાચારમાં પુરસ્કારો, સન્માનો અને વ્યક્તિઓ": 23,
     "કૃષિ વર્તમાન બાબતો": 24,
     "કલા અને સંસ્કૃતિ વર્તમાન બાબતો": 25,
+    "આરોગ્ય વર્તમાન બાબતો": 26,
 }
+
+# MongoDB connection
+def create_mongo_connection():
+    try:
+        client = MongoClient(MONGO_URI)
+        db = client[MONGO_DB]
+        collection = db[MONGO_COLLECTION]
+        logging.info("MongoDB connection successful")
+        return client, collection
+    except Exception as e:
+        logging.error(f"MongoDB connection error: {e}")
+        return None, None
+
+def log_scraped_url(collection, url):
+    try:
+        document = {
+            'url': url,
+            'scraped_at': datetime.utcnow()
+        }
+        collection.insert_one(document)
+        logging.debug(f"Logged URL to MongoDB: {url}")
+    except Exception as e:
+        logging.error(f"Error logging URL to MongoDB: {e}")
+
+def is_url_scraped(collection, url):
+    try:
+        result = collection.find_one({'url': url})
+        return result is not None
+    except Exception as e:
+        logging.error(f"Error checking URL in MongoDB: {e}")
+        return False
 
 def create_db_connection():
     try:
@@ -111,7 +143,6 @@ def create_db_connection():
         return connection
     except mysql.connector.Error as err:
         logging.error(f"Database connection error: {err}")
-        logging.error(f"Connection attempt details: host={DB_CONFIG['host']}, user={DB_CONFIG['user']}, database={DB_CONFIG['database']}")
         return None
 
 def check_and_reconnect(connection):
@@ -130,7 +161,7 @@ def fetch_article_urls(base_url, pages):
     article_urls = []
     session = requests.Session()
     logging.info(f"Fetching article URLs from {base_url} for {pages} pages")
-    for page in range(1, pages + 1):
+    for page in range(1, pages + 3):
         url = base_url if page == 1 else f"{base_url}page/{page}/"
         try:
             response = session.get(url, timeout=30)
@@ -467,8 +498,12 @@ def send_post_notification(combined_title, paragraph, image_name):
         logging.error(traceback.format_exc())
         return False
 
-async def scrape_and_process_article(url, connection, article_titles):
+async def scrape_and_process_article(url, connection, mongo_collection, article_titles):
     try:
+        if is_url_scraped(mongo_collection, url):
+            logging.info(f"URL already scraped, skipping: {url}")
+            return False, None
+        
         logging.info(f"Processing article: {url}")
         response = requests.get(url, timeout=30)
         response.raise_for_status()
@@ -517,6 +552,7 @@ async def scrape_and_process_article(url, connection, article_titles):
         success = insert_news(connection, cat_id, combined_heading, formatted_html, image_filename)
         if success and combined_heading:
             send_post_notification(combined_heading, first_paragraph_translated, image_filename)
+            log_scraped_url(mongo_collection, url)  # Log URL to MongoDB after successful processing
             return True, combined_heading
         logging.warning("Failed to insert news into database")
         return False, None
@@ -527,17 +563,23 @@ async def scrape_and_process_article(url, connection, article_titles):
 
 async def main():
     connection = None
+    mongo_client = None
     try:
         logging.info("Starting news scraper")
         connection = create_db_connection()
         if not connection:
             raise Exception("Failed to establish initial database connection")
+        
+        mongo_client, mongo_collection = create_mongo_connection()
+        if not mongo_client:
+            raise Exception("Failed to establish MongoDB connection")
+        
         base_url = "https://www.gktoday.in/current-affairs/"
         article_urls = fetch_article_urls(base_url, 1)
         article_titles = []
         for url in article_urls:
             if 'daily-current-affairs-quiz' not in url:
-                success, combined_title = await scrape_and_process_article(url, connection, article_titles)
+                success, combined_title = await scrape_and_process_article(url, connection, mongo_collection, article_titles)
                 if success and combined_title:
                     article_titles.append(combined_title)
                     logging.debug(f"Added title to list: {combined_title[:50]}...")
@@ -555,6 +597,9 @@ async def main():
         if connection:
             connection.close()
             logging.info("Database connection closed")
+        if mongo_client:
+            mongo_client.close()
+            logging.info("MongoDB connection closed")
 
 def run_scraper():
     try:
