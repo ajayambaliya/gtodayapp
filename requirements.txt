@@ -6,3 +6,4 @@ pillow
 python-dotenv
 tenacity
 firebase-admin
+pymongo
