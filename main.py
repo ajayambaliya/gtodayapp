@@ -92,8 +92,6 @@ CATEGORY_MAP = {
     "સમાચારમાં પુરસ્કારો, સન્માનો અને વ્યક્તિઓ": 23,
     "કૃષિ વર્તમાન બાબતો": 24,
     "કલા અને સંસ્કૃતિ વર્તમાન બાબતો": 25,
-    "આરોગ્ય વર્તમાન બાબતો": 26,
-    "વિજ્ and ાન અને તકનીકી વર્તમાન બાબતો": 12,
 }
 
 # MongoDB connection
@@ -162,7 +160,7 @@ def fetch_article_urls(base_url, pages):
     article_urls = []
     session = requests.Session()
     logging.info(f"Fetching article URLs from {base_url} for {pages} pages")
-    for page in range(1, pages + 3):
+    for page in range(1, pages + 1):
         url = base_url if page == 1 else f"{base_url}page/{page}/"
         try:
             response = session.get(url, timeout=30)
@@ -370,7 +368,7 @@ def format_content_as_html(content_list):
                 .news-content { margin: 1.5rem; padding: 1.5rem; }
                 .news-title { font-size: 2rem; }
                 .news-paragraph { font-size: 1rem; padding: 0.8rem; }
-                .news-list-item { font-size 1rem; padding: 1rem; padding-left: 2.5rem; }
+                .news-list-item { font-size: 1rem; padding: 1rem; padding-left: 2.5rem; }
             }
             @media (max-width: 480px) {
                 .header h1 { font-size: 1.5rem; }
@@ -382,11 +380,11 @@ def format_content_as_html(content_list):
             </style>
         '''
 
-        # Head content with proper CSS encapsulation
+        # Head content with title and meta description (first paragraph)
         head_content = f'''
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{translated_content[:100]}</title>
+            <title>{translated_content[:100] + 'અમારુ એપ ગુજરાતનુ એકમાત્ર એપ છે જે દરરોજ કેટેગરી પ્રમાણે અને પ્ર્શ્નો સહિત એટલુ કરંટ અફેર ફ્રીમા આપે છે.'}</title>            
             <link href="https://fonts.googleapis.com/css2?family=Hind+Vadodara:wght@300;400;500;600;700&display=swap" rel="stylesheet">
             {css}
         '''
