@@ -161,7 +161,7 @@ def fetch_article_urls(base_url, pages):
     article_urls = []
     session = requests.Session()
     logging.info(f"Fetching article URLs from {base_url} for {pages} pages")
-    for page in range(1, pages + 10):
+    for page in range(1, pages + 3):
         url = base_url if page == 1 else f"{base_url}page/{page}/"
         try:
             response = session.get(url, timeout=30)
