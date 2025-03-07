@@ -92,6 +92,7 @@ CATEGORY_MAP = {
     "સમાચારમાં પુરસ્કારો, સન્માનો અને વ્યક્તિઓ": 23,
     "કૃષિ વર્તમાન બાબતો": 24,
     "કલા અને સંસ્કૃતિ વર્તમાન બાબતો": 25,
+    "વિજ્ and ાન અને તકનીકી વર્તમાન બાબતો":12
 }
 
 # MongoDB connection
@@ -160,7 +161,7 @@ def fetch_article_urls(base_url, pages):
     article_urls = []
     session = requests.Session()
     logging.info(f"Fetching article URLs from {base_url} for {pages} pages")
-    for page in range(1, pages + 1):
+    for page in range(1, pages + 3):
         url = base_url if page == 1 else f"{base_url}page/{page}/"
         try:
             response = session.get(url, timeout=30)
