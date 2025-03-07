@@ -237,12 +237,8 @@ def format_content_as_html(content_list):
         translated_content = next((item['text'] for item in content_list if item.get('type') in ['heading', 'paragraph'] and item.get('text')), "Article")
         translated_first_paragraph = next((item['text'] for item in content_list if item.get('type') == 'paragraph' and item.get('text')), "")
         logging.debug(f"Formatting HTML with title: {translated_content[:50]}...")
-        head_content = f'''
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{translated_content[:100]}</title>
-            <link href="https://fonts.googleapis.com/css2?family=Hind+Vadodara:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-        '''
+
+        # CSS styles
         css = '''
             <style>
             :root {
@@ -374,7 +370,7 @@ def format_content_as_html(content_list):
                 .news-content { margin: 1.5rem; padding: 1.5rem; }
                 .news-title { font-size: 2rem; }
                 .news-paragraph { font-size: 1rem; padding: 0.8rem; }
-                .news-list-item { font-size: 1rem; padding: 1rem; padding-left: 2.5rem; }
+                .news-list-item { font-size 1rem; padding: 1rem; padding-left: 2.5rem; }
             }
             @media (max-width: 480px) {
                 .header h1 { font-size: 1.5rem; }
@@ -385,14 +381,26 @@ def format_content_as_html(content_list):
             }
             </style>
         '''
+
+        # Head content with proper CSS encapsulation
+        head_content = f'''
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{translated_content[:100]}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Hind+Vadodara:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+            {css}
+        '''
+
+        # HTML structure
         html = f'''
             <!DOCTYPE html>
             <html lang="gu">
-            <head>{head_content}{css}</head>
+            <head>{head_content}</head>
             <body>
                 <header class="header"><h1>કરંટ અફેર ગુજરાતી</h1></header>
                 <article class="news-content">
         '''
+
         for item in content_list:
             if not isinstance(item, dict) or 'type' not in item or 'text' not in item:
                 logging.debug("Skipping invalid content item")
