@@ -385,7 +385,7 @@ def format_content_as_html(content_list):
         head_content = f'''
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{translated_content[:100] + 'અમારુ એપ ગુજરાતનુ એકમાત્ર એપ છે જે દરરોજ કેટેગરી પ્રમાણે અને પ્ર્શ્નો સહિત એટલુ કરંટ અફેર ફ્રીમા આપે છે.'}</title>            
+            <title>{translated_content[:100]} - અમારુ એપ ગુજરાતનુ એકમાત્ર એપ છે જે દરરોજ કેટેગરી પ્રમાણે અને પ્ર્શ્નો સહિત એટલુ કરંટ અફેર ફ્રીમા આપે છે.</title>            
             <link href="https://fonts.googleapis.com/css2?family=Hind+Vadodara:wght@300;400;500;600;700&display=swap" rel="stylesheet">
             {css}
         '''
